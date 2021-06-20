@@ -1,0 +1,6 @@
+---
+kubectl_version: 1.21.2-00
+kubelet_version: 1.21.2-00
+kubeadm_version: 1.21.2-00
+docker_channel: "stable"
+docker_version: "19.03.11"

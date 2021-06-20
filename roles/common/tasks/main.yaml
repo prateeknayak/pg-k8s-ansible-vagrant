@@ -1,0 +1,193 @@
+---
+
+- name: Install packages that allow apt to be used over HTTPS
+  apt:
+    name: "{{ packages }}"
+    state: present
+    update_cache: yes
+  vars:
+    packages:
+    - apt-transport-https
+    - ca-certificates
+    - curl
+    - gnupg-agent
+    - software-properties-common
+
+- name: Add Kubernetes APT GPG key
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+
+- name: Add Kubernetes APT repository
+  apt_repository:
+    repo: deb http://packages.cloud.google.com/apt/ kubernetes-xenial main
+    state: present
+    filename: 'kubernetes'
+  register: kubernetes_repository
+  retries: 10
+  until: kubernetes_repository is success
+
+- name: Add Docker APT GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add Docker APT repository
+  apt_repository:
+    repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu xenial stable
+    state: present
+
+- name: Install docker engine (Debian/Ubuntu)
+  apt:
+    name: "{{ packages }}"
+    update_cache: yes
+    state: present
+  vars:
+    packages:
+    - docker-ce
+    - docker-ce-cli
+    - containerd.io
+  notify:
+    - docker status
+
+- name: Add vagrant user to docker group
+  user:
+    name: vagrant
+    group: docker
+
+#https://kubernetes.io/docs/setup/production-environment/container-runtimes/#cgroup-drivers
+- name: Configure docker daemon
+  copy:
+    src: '{{ item }}'
+    dest: '/etc/docker/daemon.json'
+    owner: root
+    group: root
+    mode: 0644
+  with_items:
+    - daemon.json
+
+- name: Hold docker version
+  dpkg_selections:
+    name: docker-ce
+    selection: hold
+
+- name: Copy Docker engine service file
+  register: change_docker
+  template:
+    src: "docker.service.j2"
+    dest: "/lib/systemd/system/docker.service"
+    owner: root
+    group: root
+    mode: 0755
+
+- name: Enable and check Docker service
+  systemd:
+    name: docker
+    daemon_reload: yes
+    state: restarted
+    enabled: yes
+  register: started_docker
+
+- name: Disable system swap
+  shell: "swapoff -a"
+  when: ansible_swaptotal_mb > 0
+
+- name: Remove current swaps from fstab
+  lineinfile:
+    dest: /etc/fstab
+    regexp: '(?i)^([^#][\S]+\s+(none|swap)\s+swap.*)'
+    line: '# \1'
+    backrefs: yes
+    state: present
+
+- name: install iptable packages
+  apt:
+    name:
+      - ebtables
+      - arptables
+    install_recommends: false
+    update_cache: true
+    force_apt_get: true
+  register: apt_install_iptabls
+  retries: 5
+  until: apt_install_iptabls is success
+
+- name: use arptables-legacy
+  alternatives:
+    name: arptables
+    path: /usr/sbin/arptables-legacy
+  failed_when: false
+
+- name: use ebtables-legacy
+  alternatives:
+    name: ebtables
+    path: /usr/sbin/ebtables-legacy
+  failed_when: false
+
+- name: use iptables-legacy
+  alternatives:
+    name: iptables
+    path: /usr/sbin/iptables-legacy
+  failed_when: false
+
+- name: use ip6tables-legacy
+  alternatives:
+    name: ip6tables
+    path: /usr/sbin/ip6tables-legacy
+  failed_when: false
+
+- name: Disable swappiness and pass bridged IPv4 traffic to iptable's chains
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+  with_items:
+    - { name: 'vm.swappiness', value: '0' }
+    - { name: 'net.bridge.bridge-nf-call-iptables', value: '1' }
+
+- name: Install kubernetes packages (Debian/Ubuntu)
+  apt:
+    name: ["kubelet", "kubeadm", "kubectl"]
+    update_cache: yes
+    state: present
+  register: apt_install_kube
+  retries: 5
+  until: apt_install_kube is success
+  vars:
+    packages:
+      - kubelet={{ kubelet_version }}
+      - kubeadm={{ kubeadm_version }}
+      - kubectl={{ kubectl_version }}
+
+- name: Hold kubectl version.
+  dpkg_selections:
+    name: 'kubectl'
+    selection: hold
+
+- name: Hold kubelet version.
+  dpkg_selections:
+    name: 'kubelet'
+    selection: hold
+
+- name: Hold kubeadm version.
+  dpkg_selections:
+    name: 'kubeadm'
+    selection: hold
+
+- name: Create service drop-in directory
+  file:
+    path: /etc/systemd/system/kubelet.service.d/
+    state: directory
+    owner: "{{ ansible_user | default(ansible_user_id) }}"
+    group: "{{ ansible_user | default(ansible_user_id) }}"
+    mode: 0755
+
+- name: Copy kubeadm conf to drop-in directory
+  template: src=20-extra-args.conf.j2 dest=/etc/systemd/system/kubelet.service.d/20-extra-args.conf
+
+- name: Reload kubelet daemon
+  systemd:
+    name: kubelet
+    daemon_reload: yes
+    enabled: yes
+

@@ -1,0 +1,27 @@
+---
+
+- name: Create Kubernetes addon directory
+  file:
+    path: "/etc/kubernetes/network"
+    state: directory
+
+- name: "Copy canal YAML files"
+  template:
+    src: "{{ item }}"
+    dest: "/etc/kubernetes/network/{{ item | basename | regex_replace('\\.j2','') }}"
+  with_fileglob:
+    - ../templates/canal*.j2
+
+- name: "Check canal daemonset is working"
+  shell: kubectl --kubeconfig=/etc/kubernetes/admin.conf get ds --all-namespaces | grep canal
+  delegate_to: "{{ groups['controlplane'][0] }}"
+  run_once: true
+  register: check_net
+  ignore_errors: true
+  changed_when: false
+
+- name: "Create canal network daemonset"
+  when: check_net is failed
+  command: kubectl apply --kubeconfig=/etc/kubernetes/admin.conf -f /etc/kubernetes/network/
+  delegate_to: "{{ groups['controlplane'][0] }}"
+  run_once: true

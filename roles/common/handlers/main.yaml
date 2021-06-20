@@ -1,0 +1,5 @@
+- name: Docker Status
+  ansible.builtin.service:
+    name: docker
+    state: restarted
+  listen: "docker status"

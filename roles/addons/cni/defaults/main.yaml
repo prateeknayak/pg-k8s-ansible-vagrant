@@ -1,0 +1,4 @@
+---
+
+calico_cni_opts: "interface=eth1"
+flannel_cni_opts: "--iface=eth1"

@@ -1,0 +1,7 @@
+# Kubernetes
+kube_version: v1.21.2
+token: b0f7b8.8d1767876297d85c
+
+service_cidr: "10.96.0.0/12"
+pod_network_cidr: "10.244.0.0/16"
+master_ip: "192.168.50.10"
