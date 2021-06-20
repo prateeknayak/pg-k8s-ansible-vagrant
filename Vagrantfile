@@ -21,7 +21,7 @@ Vagrant.configure("2") do |config|
       
     config.vm.define "k8s-m1" do |master|
         master.vm.box = IMAGE_NAME
-        master.vm.network "private_network", ip: "192.168.50.10", auto_config: true
+        master.vm.network "private_network", ip: "192.168.50.10"
         master.vm.hostname = "k8s-m1"
         master.vm.provision "shell", inline: $script
     end
@@ -29,7 +29,7 @@ Vagrant.configure("2") do |config|
     (1..N).each do |i|
         config.vm.define "k8s-n#{i}" do |node|
             node.vm.box = IMAGE_NAME
-            node.vm.network "private_network", ip: "192.168.50.#{i + 10}", auto_config: true
+            node.vm.network "private_network", ip: "192.168.50.#{i + 10}"
             node.vm.hostname = "k8s-n#{i}"
             node.vm.provision "shell", inline: $script
         end
