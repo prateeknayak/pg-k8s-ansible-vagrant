@@ -15,6 +15,13 @@ vagrant up
 ansible-playbook install-k8s.yaml
 ```
 
+# Kubeconfig 
+
+```
+scp -i ~/.vagrant.d/insecure_private_key vagrant@192.168.50.10:~/.kube/config ./
+export KUBECONFIG=./config
+```
+
 # NOTE: 
 
 This is mostly inspired from other resources which provision k8s using ansible  on vagrant
